@@ -25,6 +25,8 @@ options(
 
 scale_colour_discrete = scale_color_viridis_d
 scale_fill_discrete = scale_fill_viridis_d
+
+set.seed(1)
 ```
 
 ### Problem 1
@@ -97,7 +99,7 @@ results_df %>%
 
 Create a tidy dataframe.
 
-```{r, error = TRUE}
+```{r, message = FALSE}
 path_df =  
   tibble(
     path = list.files("lda_data")
@@ -123,7 +125,8 @@ path_df =
     arm = case_when(
       arm == "con" ~ "control",
       arm == "exp" ~ "experimental"
-    )
+    ),
+    week_number = as.numeric(week_number)
   )
 ```
 
@@ -143,6 +146,123 @@ path_df %>%
     )
 ```
 
-According to the spaghetti plot, experimental group has a general trend of increment, while control group does not. 
+According to the spaghetti plot, experimental group has a general trend of increment, while control group does not. In week eight, all observations of experimental group are higher than those of control group.
 
 ### Problem 3
+
+Set mu = 0. Generate 5000 datasets from the model. Save data.
+
+```{r}
+sim_test = function(sample_size = 30, mu, sigma = 5) {
+  
+  sim_data = 
+    tibble(
+      x = rnorm(n = sample_size, mean = mu, sd = sigma)
+    )
+
+  sim_data %>% 
+    t.test(
+      alternative = "two.sided", 
+      conf.level = 0.95
+      ) %>% 
+    broom::tidy() %>% 
+    select(estimate, p.value)
+  
+}
+
+output_mu0 = vector("list", length = 5000)
+
+for (i in 1:5000) {
+  
+  output_mu0[[i]] = sim_test(mu = 0)
+  
+}
+
+bind_rows(output_mu0)
+```
+
+Repeat the above for mu = {1,2,3,4,5,6}. 
+
+```{r}
+output_mu1_6 = 
+  tibble(
+  mu = c(1:6)
+) %>% 
+  mutate(
+    output_lists = map(.x = mu, ~ rerun(5000, sim_test(mu = .x))),
+    estimate_df = map(output_lists, bind_rows)
+  ) %>% 
+  select(-output_lists) %>% 
+  unnest(estimate_df)
+```
+
+Make a plot showing the proportion of times the null was rejected on the y axis and the true value of mu on the x axis.
+
+```{r}
+output_mu1_6 %>% 
+  mutate(
+    decision = case_when(
+      p.value < 0.05 ~ "reject",
+      p.value >= 0.05 ~ "fail to reject"
+    )
+  ) %>% 
+  group_by(mu) %>%
+  summarise(
+    reject_prop = sum(decision == "reject")/5000
+    ) %>% 
+  ggplot(aes(x = mu, y = reject_prop)) +
+  geom_point() +
+  geom_line() +
+  labs(
+    title = "True value of mu vs Rejection proportion",
+    x = "True value of mu",
+    y = "Rejection proportion"
+  )
+```
+
+According to the plot, power increases as effect size increases.
+
+Make a plot showing the average estimate of mu on the y axis and the true value of mu on the x axis.
+
+```{r}
+output_mu1_6 %>% 
+  group_by(mu) %>%
+  summarise(
+    avg_samp_mean = mean(estimate)
+    ) %>% 
+  ggplot(aes(x = mu, y = avg_samp_mean)) +
+  geom_point() +
+  geom_line() +
+  labs(
+    title = "True value of mu vs Average estimate of mu",
+    x = "True value of mu",
+    y = "Average estimate of mu"
+  )
+```
+
+Make a second plot the average estimate of mu only in samples for which the null was rejected on the y axis and the true value of mu on the x axis.
+
+```{r}
+output_mu1_6 %>% 
+  mutate(
+    decision = case_when(
+      p.value < 0.05 ~ "reject",
+      p.value >= 0.05 ~ "fail to reject"
+    )
+  ) %>% 
+  group_by(mu) %>%
+  filter(decision == "reject") %>% 
+  summarise(
+    avg_reject_mean = mean(estimate)
+    ) %>% 
+  ggplot(aes(x = mu, y = avg_reject_mean)) +
+  geom_point() +
+  geom_line() +
+  labs(
+    title = "True value of mu vs Average estimate of mu that rejected",
+    x = "True value of mu",
+    y = "Average estimate of mu that rejected"
+  )
+```
+
+The average estimates of mu that rejected get closer to the true values of mu as effect size increases. Because power increases as effect size increases, it is more likely to reject null when effect size is large. In other words, amounts of mu that rejected get larger when effect size increases, which the average estimates of mu that rejected approaches average estimates of mu.
