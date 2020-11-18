@@ -138,8 +138,11 @@ path_df %>%
   geom_line() +
   labs(
     title = "Spaghetti plot showing observations on each subject over time",
-    x = "Week_number",
+    x = "Week Number",
     y = "Observations"
     )
 ```
 
+According to the spaghetti plot, experimental group has a general trend of increment, while control group does not. 
+
+### Problem 3
